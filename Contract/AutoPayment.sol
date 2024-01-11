@@ -1,40 +1,30 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.4;
 
-contract IERC20 {
-  function approve(address spender, uint256 value) public virtual returns (bool) {}
-  function transfer(address to, uint256 value) public virtual returns (bool) {}
-  function transferFrom(address from, address to, uint256 value) public virtual returns (bool) {}
-  function name() public view virtual returns (string memory) {}
-  function symbol() public view virtual returns (string memory) {}
-  function decimals() public view virtual returns (uint256) {}
-  function totalSupply() public view virtual returns (uint256) {}
-  function balanceOf(address account) public view virtual returns (uint256) {}
-  function allowance(address owner, address spender) public view virtual returns (uint256) {}
-}
+import '../Interface/IERC20.sol';
 
 contract RecurringPayments {
 
   event NewSubscription(
-    address Customer,
-    address Payee,
-    uint256 Allowance,
-    address TokenAddress,
-    string Name,
-    string Description,
-    uint256 LastExecutionDate,
-    uint256 SubscriptionPeriod
+    address customer,
+    address payee,
+    uint256 allowance,
+    address tokenAddress,
+    string name,
+    string description,
+    uint256 lastExecutionDate,
+    uint256 subscriptionPeriod
   );
   event SubscriptionCancelled(
-    address Customer,
-    address Payee
+    address customer,
+    address payee
   );
   event SubscriptionPaid(
-    address Customer,
-    address Payee,
-    uint256 PaymentDate,
-    uint256 PaymentAmount,
-    uint256 NextPaymentDate
+    address customer,
+    address payee,
+    uint256 paymentDate,
+    uint256 paymentAmount,
+    uint256 nextPaymentDate
   );
 
   mapping(address => mapping(address => Subscription)) public subscriptions;
@@ -50,7 +40,6 @@ contract RecurringPayments {
     uint256 LastExecutionDate; 
     uint256 SubscriptionPeriod;
     bool IsActive; 
-    bool Exists;
     }
 
   enum role {
@@ -87,14 +76,12 @@ contract RecurringPayments {
   }
 //Time in seconds until this subscription comes due
   function subscriptionTimeRemaining(address _customer, address _payee) public view returns(uint256){
-    uint256 remaining = getSubscription(_customer, _payee).LastExecutionDate+getSubscription(_customer, _payee).SubscriptionPeriod;
-    if(block.timestamp > remaining){
-      return 0;
-    }
-    else {
-      return remaining - block.timestamp;
-    }
+    Subscription memory subscription = getSubscription(_customer, _payee);
+    uint256 remaining = subscription.LastExecutionDate + subscription.SubscriptionPeriod;
+    return (block.timestamp > remaining) ? 0 : remaining - block.timestamp;
   }
+
+
 //Enables a customer to establish a new subscription within a smart contract.
 //2x subscription cost
 //initial subscription payment.
@@ -115,13 +102,11 @@ contract RecurringPayments {
 
     // Calculate the actual subscription period based on the frequency
     uint256 actualSubscriptionPeriod;
-    if (_frequency == SubscriptionFrequency.DAILY) {
-      actualSubscriptionPeriod = _subscriptionPeriod * 1 days;
-    } else if (_frequency == SubscriptionFrequency.MONTHLY) {
-      actualSubscriptionPeriod = _subscriptionPeriod * 30 days; // Approximation
-    } else if (_frequency == SubscriptionFrequency.YEARLY) {
-      actualSubscriptionPeriod = _subscriptionPeriod * 365 days;
-    }
+    uint32[3] memory daysPerPeriod = [1 days, 30 days, 365 days];
+    require(uint(_frequency) < daysPerPeriod.length, "Invalid frequency");
+    actualSubscriptionPeriod = _subscriptionPeriod * daysPerPeriod[uint(_frequency)];
+
+
 
     subscriptions[msg.sender][_payee] = Subscription(
         msg.sender, // Change this to Customer
@@ -132,7 +117,6 @@ contract RecurringPayments {
         _description,
         block.timestamp,
         _subscriptionPeriod,
-        true,
         true
     );
     receipts[msg.sender].push(SubscriptionReceipt(
@@ -162,6 +146,7 @@ contract RecurringPayments {
     emit SubscriptionPaid(msg.sender, _payee, block.timestamp, _subscriptionCost, block.timestamp+ actualSubscriptionPeriod);
   }
   
+
   //cancel subsription, called by either customer or payee
   function cancelSubscription(
     address _customer,
@@ -173,6 +158,8 @@ contract RecurringPayments {
 
     emit SubscriptionCancelled(_customer, _payee);
   }
+
+
 //subscription paid, called by payee
 //requirement: Requires SubscriptionPeriod to have a passed since LastExecutionDate, as well as an ERC20 transferFrom to succeed
   function executePayment(
@@ -192,15 +179,10 @@ contract RecurringPayments {
     emit SubscriptionPaid(_customer, msg.sender, block.timestamp, getSubscription(_customer, msg.sender).Allowance, block.timestamp+getSubscription(_customer, msg.sender).SubscriptionPeriod);
   }
 
+
 //whether or not this subscription has been paid this period
   function _subscriptionPaid(address _customer, address _payee) internal view returns(bool){
-    uint256 remaining = getSubscription(_customer, _payee).LastExecutionDate+getSubscription(_customer, _payee).SubscriptionPeriod;
-    if(block.timestamp > remaining){
-      return false;
-    }
-    else {
-      return true;
-    }
+    uint256 remaining = getSubscription(_customer, _payee).LastExecutionDate + getSubscription(_customer, _payee).SubscriptionPeriod;
+    return block.timestamp <= remaining;
   }
-
 }
