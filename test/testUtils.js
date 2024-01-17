@@ -2,9 +2,10 @@ const { loadFixture } = require("@nomicfoundation/hardhat-network-helpers");
 const { ethers } = require("hardhat");
 
 async function deployContracts() {
-  const [userA, autoPayDeployer] = await ethers.getSigners();
+  // [userA , merchant, relayer]
+  const [userA, _,  relayer] = await ethers.getSigners();
   const autoPay = await ethers.getContractFactory('RecurringPayments');
-  const autoPayContract = await autoPay.connect(autoPayDeployer).deploy();
+  const autoPayContract = await autoPay.connect(relayer).deploy();
   const mockToken = await ethers.getContractFactory('MockToken');
   const mockTokenContract = await mockToken.connect(userA).deploy();
 

@@ -15,12 +15,10 @@ contract RecurringPayments {
     uint256 lastExecutionDate,
     uint256 subscriptionPeriod
   );
-
   event SubscriptionCancelled(
     address customer,
     address payee
   );
-
   event SubscriptionPaid(
     address customer,
     address payee,
@@ -66,7 +64,10 @@ contract RecurringPayments {
     Role role;   //Role enum for reciept. Shows if user is customer or payee
   }
 
+  address immutable relayer;
+
   constructor() {
+    relayer = msg.sender;
   }
 
 
@@ -104,11 +105,9 @@ contract RecurringPayments {
     IERC20 tokenInterface;
     tokenInterface = IERC20(_token);
 
-
     require(getSubscription(msg.sender, _payee).isActive != true, "0xSUB: Active subscription already exists.");
     require(_subscriptionCost <= tokenInterface.balanceOf(msg.sender), "0xSUB: Insufficient token balance.");
     require(_subscriptionPeriod > 0, "0xSUB: Subscription period must be greater than 0.");
-
 
     // Calculate the actual subscription period based on the frequency
     uint256 actualSubscriptionPeriod;
@@ -175,23 +174,24 @@ contract RecurringPayments {
   }
 
 
-//subscription paid, called by payee
+//subscription paid, called by relayer
 //requirement: Requires SubscriptionPeriod to have a passed since LastExecutionDate, as well as an ERC20 transferFrom to succeed
   function executePayment(
-    address _customer
+    address _customer,
+    address _payee
   ) public virtual {
-    require(getSubscription(_customer, msg.sender).payee == msg.sender, "0xSUB: Only subscription payees may execute a subscription payment.");
-    require(getSubscription(_customer, msg.sender).isActive == true, "0xSUB: Subscription already inactive.");
-    require(_subscriptionPaid(_customer, msg.sender) != true, "0xSUB: Subscription already paid for this period.");
+    require(relayer == msg.sender, "0xSUB: Only relayer may execute a subscription payment.");
+    require(getSubscription(_customer, _payee).isActive == true, "0xSUB: Subscription already inactive.");
+    require(_subscriptionPaid(_customer, _payee) != true, "0xSUB: Subscription already paid for this period.");
 
     IERC20 tokenInterface;
-    tokenInterface = IERC20(getSubscription(_customer, msg.sender).tokenAddress);
+    tokenInterface = IERC20(getSubscription(_customer, _payee).tokenAddress);
 
-    subscriptions[_customer][msg.sender].lastExecutionDate = block.timestamp;
-    require(tokenInterface.transferFrom(_customer, msg.sender, getSubscription(_customer, msg.sender).allowance), "0xSUB: Subscription payment failed.");
+    subscriptions[_customer][_payee].lastExecutionDate = block.timestamp;
+    require(tokenInterface.transferFrom(_customer, _payee, getSubscription(_customer, _payee).allowance), "0xSUB: Subscription payment failed.");
 
 
-    emit SubscriptionPaid(_customer, msg.sender, block.timestamp, getSubscription(_customer, msg.sender).allowance, block.timestamp+getSubscription(_customer, msg.sender).subscriptionPeriod);
+    emit SubscriptionPaid(_customer, _payee, block.timestamp, getSubscription(_customer, _payee).allowance, block.timestamp+getSubscription(_customer, _payee).subscriptionPeriod);
   }
 
 
