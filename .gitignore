@@ -15,8 +15,8 @@ yarn.lock
 .info.txt
 *.js
 !hardhat.config.js
-!DailySubscription.spec.js
-!MonthlySubscription.spec.js
+!DailySub.spec.js
+!MonthlySub.spec.js
 !testUtils.js
 prettify.js
 sorter.js
